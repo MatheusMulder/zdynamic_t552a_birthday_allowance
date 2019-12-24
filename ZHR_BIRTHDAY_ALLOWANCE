@@ -1,0 +1,283 @@
+*&---------------------------------------------------------------------*
+*& Report ZHR_BIRTHDAY_ALLOWANCE
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT zhr_birthday_allowance MESSAGE-ID zhrbirthdayallowance.
+
+INCLUDE zhr_birthday_allowancetop.
+INCLUDE zhr_birthday_allowancesrc.
+
+IF s_pernr IS NOT INITIAL.
+
+  SELECT pernr, werks, btrtl, persg ,persk, begda, endda  FROM pa0001
+     INTO TABLE @DATA(lt_pa0001) WHERE pernr IN @s_pernr.
+
+  IF sy-subrc IS INITIAL.
+    SORT lt_pa0001 BY pernr endda DESCENDING.
+    DELETE ADJACENT DUPLICATES FROM lt_pa0001 COMPARING pernr.
+
+    IF lt_pa0001 IS NOT INITIAL.
+
+      SELECT pernr, gbdat FROM pa0002
+        INTO TABLE @DATA(lt_pa0002) FOR ALL ENTRIES IN @lt_pa0001
+        WHERE pernr = @lt_pa0001-pernr AND
+              endda = @lt_pa0001-endda .
+
+      SELECT pernr, subty FROM pa2001
+        INTO TABLE @DATA(lt_pa2001) FOR ALL ENTRIES IN @lt_pa0001
+        WHERE pernr = @lt_pa0001-pernr AND
+              endda = @lt_pa0001-endda AND
+              subty IN @s_absen.
+
+      SELECT pernr, begda, endda FROM pa2002
+        INTO TABLE @DATA(lt_pa2002) FOR ALL ENTRIES IN @lt_pa0001
+         WHERE pernr = @lt_pa0001-pernr.
+
+
+      SELECT pernr, schkz FROM pa0007
+        INTO TABLE @DATA(lt_pa0007) FOR ALL ENTRIES IN @lt_pa0001
+        WHERE pernr = @lt_pa0001-pernr AND
+*              begda = @lt_pa0001-begda AND
+              endda = @lt_pa0001-endda .
+
+
+      SELECT werks, btrtl, mofid FROM t001p
+        INTO TABLE @DATA(lt_t001p) FOR  ALL ENTRIES IN @lt_pa0001
+        WHERE werks = @lt_pa0001-werks AND
+              btrtl = @lt_pa0001-btrtl.
+
+
+      SELECT persg, persk, zeity FROM t503
+      INTO TABLE @DATA(lt_t503) FOR  ALL ENTRIES IN @lt_pa0001
+      WHERE persg = @lt_pa0001-persg AND
+            persk = @lt_pa0001-persk.
+
+    ENDIF.
+
+  ENDIF.
+ENDIF.
+
+LOOP AT lt_pa0001 INTO DATA(lw_pa0001).
+
+
+  READ TABLE lt_pa2001  WITH KEY pernr = lw_pa0001-pernr BINARY SEARCH TRANSPORTING NO FIELDS.
+  IF sy-subrc IS NOT INITIAL.
+
+    wa_t552a-pernr = lw_pa0001-pernr.
+
+    IF lt_pa0002 IS NOT INITIAL.
+      SORT lt_pa0002 BY pernr.
+      READ TABLE lt_pa0002 INTO DATA(lw_pa0002) WITH KEY pernr = lw_pa0001-pernr BINARY SEARCH.
+      IF sy-subrc IS INITIAL.
+        wa_t552a-gbdat = lw_pa0002-gbdat.
+*        IF lt_pa2002 IS NOT INITIAL.
+*          v_check_date = p_dateb(4) && lw_pa0002-gbdat+4(4) .
+*          READ TABLE lt_pa2002  INTO DATA(lw_pa2002) WITH KEY pernr = lw_pa0002-pernr
+*                                                              begda = v_check_date
+*                                                              endda = v_check_date .
+*          IF sy-subrc IS INITIAL.
+*            CONTINUE.
+*          ENDIF.
+*        ENDIF.
+      ENDIF.
+    ENDIF.
+
+
+    IF lt_pa0007 IS NOT INITIAL.
+      SORT lt_pa0007 BY pernr.
+      READ TABLE lt_pa0007 INTO DATA(lw_pa0007) WITH KEY pernr = lw_pa0001-pernr BINARY SEARCH.
+      IF sy-subrc IS INITIAL.
+        wa_t552a-schkz = lw_pa0007-schkz.
+      ENDIF.
+    ENDIF.
+
+    IF lt_t001p IS NOT INITIAL.
+      SORT lt_t001p BY werks btrtl.
+      READ TABLE lt_t001p INTO DATA(lw_t001p) WITH KEY werks = lw_pa0001-werks
+                                                       btrtl = lw_pa0001-btrtl BINARY SEARCH.
+      IF sy-subrc IS INITIAL.
+        wa_t552a-mofid = lw_t001p-mofid.
+      ENDIF.
+    ENDIF.
+
+    IF lt_t503 IS NOT INITIAL.
+      SORT lt_t503 BY persg persk.
+      READ TABLE lt_t503 INTO DATA(lw_t503) WITH KEY persg = lw_pa0001-persg
+                                                     persk = lw_pa0001-persk BINARY SEARCH.
+      IF sy-subrc IS INITIAL.
+        wa_t552a-zeity = lw_t503-zeity.
+      ENDIF.
+    ENDIF.
+
+    wa_t552a-mosid = '37'.
+
+    APPEND wa_t552a TO gt_t552a_unique_period.
+
+  ENDIF.
+
+ENDLOOP.
+
+IF  gt_t552a_unique_period IS INITIAL.
+  MESSAGE s000 DISPLAY LIKE 'W'.
+  EXIT.
+ENDIF.
+
+IF p_date NE p_dateb.
+
+  CALL FUNCTION 'CSCP_PARA1_GET_PERIODS'
+    EXPORTING
+      i_datuv    = p_date
+      i_datub    = p_dateb
+      i_timeunit = c_m
+    TABLES
+      et_dates   = gt_interval_period.
+
+  IF gt_interval_period IS NOT INITIAL.
+    LOOP AT gt_interval_period INTO DATA(lw_interval_period).
+      LOOP AT gt_t552a_unique_period INTO DATA(lw_t552a_u).
+        lw_t552a_u-monat = lw_interval_period-datuv+4(2).
+        lw_t552a_u-kjahr = lw_interval_period-datuv(4).
+        APPEND lw_t552a_u TO gt_t552a.
+      ENDLOOP.
+    ENDLOOP.
+    CLEAR gt_t552a_unique_period.
+  ENDIF.
+ELSE.
+
+  LOOP AT gt_t552a_unique_period ASSIGNING FIELD-SYMBOL(<fs_t552a_u>).
+    <fs_t552a_u>-monat = p_date+4(2).
+    <fs_t552a_u>-kjahr = p_date(4).
+  ENDLOOP.
+ENDIF.
+
+IF gt_t552a IS INITIAL.
+  gt_t552a_origin = gt_t552a_unique_period.
+ELSE.
+  gt_t552a_origin = gt_t552a.
+ENDIF.
+
+LOOP AT gt_t552a_origin ASSIGNING FIELD-SYMBOL(<fs_check_birthday>).
+
+
+
+  IF <fs_check_birthday>-monat EQ <fs_check_birthday>-gbdat+4(2) .
+
+
+    READ TABLE lt_pa0002 INTO DATA(lw_pa0002b) WITH KEY pernr = <fs_check_birthday>-pernr.
+
+    IF sy-subrc IS INITIAL.
+
+      v_check_date = <fs_check_birthday>-kjahr(4) && lw_pa0002b-gbdat+4(4) .
+      READ TABLE lt_pa2002  INTO DATA(lw_pa2002) WITH KEY pernr = lw_pa0002b-pernr
+                                                          begda = v_check_date
+                                                          endda = v_check_date .
+      IF sy-subrc IS NOT INITIAL.
+        <fs_check_birthday>-allowence = abap_true.
+      ENDIF.
+
+    ENDIF.
+  ENDIF.
+
+ENDLOOP.
+
+DELETE gt_t552a_origin WHERE allowence = space.
+
+IF gt_t552a_origin IS NOT INITIAL.
+
+  SELECT   zeity  ,
+           mofid  ,
+           mosid  ,
+           schkz  ,
+           kjahr  ,
+           monat  ,
+           tpr01  ,
+           tpr02  ,
+           tpr03  ,
+           tpr04  ,
+           tpr05  ,
+           tpr06  ,
+           tpr07  ,
+           tpr08  ,
+           tpr09  ,
+           tpr10  ,
+           tpr11  ,
+           tpr12  ,
+           tpr13  ,
+           tpr14  ,
+           tpr15  ,
+           tpr16  ,
+           tpr17  ,
+           tpr18  ,
+           tpr19  ,
+           tpr20  ,
+           tpr21  ,
+           tpr22  ,
+           tpr23  ,
+           tpr24  ,
+           tpr25  ,
+           tpr26  ,
+           tpr27  ,
+           tpr28  ,
+           tpr29  ,
+           tpr30  ,
+           tpr31
+    FROM t552a INTO TABLE @DATA(lt_t552a)
+      FOR ALL ENTRIES IN @gt_t552a_origin
+    WHERE zeity =  @gt_t552a_origin-zeity AND
+          mofid =  @gt_t552a_origin-mofid AND
+          mosid =  @gt_t552a_origin-mosid AND
+          schkz =  @gt_t552a_origin-schkz AND
+          kjahr =  @gt_t552a_origin-kjahr AND
+          monat =  @gt_t552a_origin-monat .
+
+
+ENDIF.
+
+IF lt_t552a IS INITIAL.
+  MESSAGE s000 DISPLAY LIKE 'W'.
+  EXIT.
+ENDIF.
+
+SORT lt_t552a BY zeity mofid mosid schkz kjahr monat.
+
+LOOP AT gt_t552a_origin ASSIGNING FIELD-SYMBOL(<fs_t552a>).
+
+  IF <fs_t552a>-allowence EQ abap_true .
+
+    READ TABLE lt_t552a WITH KEY zeity = <fs_t552a>-zeity
+                                 mofid = <fs_t552a>-mofid
+                                 mosid = <fs_t552a>-mosid
+                                 schkz = <fs_t552a>-schkz
+                                 kjahr = <fs_t552a>-kjahr
+                                 monat = <fs_t552a>-monat INTO DATA(lw_t552a) BINARY SEARCH.
+
+    IF sy-subrc IS INITIAL.
+      v_column_name = 'TPR' && <fs_t552a>-gbdat+6(2).
+      ASSIGN COMPONENT v_column_name OF STRUCTURE lw_t552a TO FIELD-SYMBOL(<fs_allowance>).
+
+      IF <fs_allowance> IS ASSIGNED.
+        IF <fs_allowance> NE 'FOLG'.
+          PERFORM absence_2002.
+          v_check_criterias = abap_true.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+  ENDIF.
+
+ENDLOOP.
+
+IF gt_log_birthday_allowence IS NOT INITIAL.
+  MESSAGE s001 DISPLAY LIKE 'S'.
+  PERFORM display_settings.
+  PERFORM display_alv_report.
+
+
+ELSE.
+  MESSAGE s000 DISPLAY LIKE 'W'.
+  EXIT.
+ENDIF.
+
+INCLUDE zhr_birthday_allowance_absef01.
+INCLUDE zhr_birthday_allowance_absef02.

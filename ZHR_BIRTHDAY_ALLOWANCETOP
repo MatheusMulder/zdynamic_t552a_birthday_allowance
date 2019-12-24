@@ -1,0 +1,43 @@
+*&---------------------------------------------------------------------*
+*&  Include           ZHR_BIRTHDAY_ALLOWANCETOP
+*&---------------------------------------------------------------------*
+
+TABLES: pa0001, pa2001, t552a .
+
+TYPES:BEGIN OF ty_t552a,
+        pernr     TYPE pa0001-pernr,
+        gbdat     TYPE pa0002-gbdat,
+        zeity     TYPE t552a-zeity,
+        mofid     TYPE t552a-mofid,
+        mosid     TYPE t552a-mosid,
+        schkz     TYPE t552a-schkz,
+        kjahr     TYPE t552a-kjahr,
+        monat     TYPE t552a-monat,
+        allowence TYPE flag,
+      END OF ty_t552a.
+
+DATA: gt_t552a                  TYPE TABLE OF ty_t552a,
+      gt_t552a_unique_period    TYPE TABLE OF ty_t552a,
+      gt_t552a_origin           TYPE TABLE OF ty_t552a,
+      gt_interval_period        TYPE TABLE OF scscp_period_str,
+      wa_t552a                  LIKE LINE OF gt_t552a,
+      gt_log_birthday_allowence TYPE TABLE OF zhrbirthallowenc,
+      gs_log_birthday_allowence LIKE LINE OF gt_log_birthday_allowence,
+      v_column_name             TYPE string,
+      v_return                  TYPE bapireturn1,
+      v_key                     TYPE bapipakey,
+      v_inftyp                  LIKE prelp-infty VALUE '2002',
+      v_check_date              TYPE date,
+      v_dif_bt_years            TYPE i,
+      v_check_criterias         TYPE flag.
+
+
+DATA alv_table    TYPE REF TO cl_salv_table.
+DATA alv_columns TYPE REF TO cl_salv_columns_table.
+DATA single_column  TYPE REF TO cl_salv_column.
+
+
+DATA: w_infotype2002 TYPE p2002.
+
+CONSTANTS: c_m(1) TYPE c VALUE 'M',
+           insert TYPE pspar-actio VALUE 'INS'.

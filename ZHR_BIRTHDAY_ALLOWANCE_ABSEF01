@@ -1,0 +1,60 @@
+*----------------------------------------------------------------------*
+***INCLUDE ZHR_BIRTHDAY_ALLOWANCE_ABSEF01.
+*----------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Form  ABSENCE_2002
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM absence_2002 .
+
+  DATA: lv_kjahr                  TYPE mlcrf-kjahr.
+
+  w_infotype2002 = VALUE #( pernr = <fs_t552a>-pernr
+                            subty = '9040'
+                            begda = <fs_t552a>-kjahr && <fs_t552a>-gbdat+4(4)
+                            endda = <fs_t552a>-kjahr && <fs_t552a>-gbdat+4(4) ).
+
+  "This code is requred and locks the record ready for modification
+  CALL FUNCTION 'HR_EMPLOYEE_ENQUEUE'
+    EXPORTING
+      number = w_infotype2002-pernr.
+
+  CALL FUNCTION 'HR_INFOTYPE_OPERATION'
+    EXPORTING
+      infty         = v_inftyp
+      subtype       = w_infotype2002-subty
+      number        = w_infotype2002-pernr     "employeenumber
+      validityend   = w_infotype2002-endda
+      validitybegin = w_infotype2002-begda
+      record        = w_infotype2002
+      operation     = insert
+    IMPORTING
+      return        = v_return
+      key           = v_key
+    EXCEPTIONS
+      OTHERS        = 0.
+
+  IF sy-subrc IS INITIAL.
+    gs_log_birthday_allowence = VALUE #(  pernr             = w_infotype2002-pernr
+                                          subty             = w_infotype2002-subty
+                                          aniversario       = w_infotype2002-begda
+                                          data_criacao      = sy-datum
+                                          hora_criacao      = sy-uzeit  ).
+
+    APPEND gs_log_birthday_allowence TO gt_log_birthday_allowence.
+
+    MODIFY zhrbirthallowenc FROM TABLE gt_log_birthday_allowence.
+
+  ENDIF.
+
+  "unlock record after modification
+  CALL FUNCTION 'HR_EMPLOYEE_DEQUEUE'
+    EXPORTING
+      number = w_infotype2002-pernr.
+
+
+ENDFORM.
